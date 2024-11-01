@@ -61,7 +61,9 @@ router.route('/:id').get(async (req, res) => {
     // Construct the response object
     const formattedUser = {
       id: user._id.toString(), // Convert ObjectId to string
+      email: user.email,
       username: user.username,
+      bio: user.bio,
       dpImage, // The image will be null if dpImage is not available
       profileImages // Include formatted profileImages
     };
@@ -70,6 +72,52 @@ router.route('/:id').get(async (req, res) => {
   } catch (error) {
     console.error('Error fetching user:', error); // Log the error for debugging
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.route('/:id').put(async (req, res) => {
+  const { id } = req.params; // Get user ID from URL parameters
+  const { username, bio, dpImage } = req.body; // Destructure the fields you want to update
+
+  try {
+    // Check if user exists
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Optionally check for unique fields like username
+    if (username && username !== user.username) {
+      const existingUser = await User.findOne({ username });
+      if (existingUser) {
+        return res.status(400).json({ username: 'Username already exists' });
+      }
+      user.username = username; // Update username
+    }
+
+    // Update bio if provided
+    if (bio !== undefined) { // Check if bio is provided
+      user.bio = bio; // Update bio
+    }
+
+    // Update dpImage if provided
+    if (dpImage) {
+      user.dpImage = {
+        data: Buffer.from(dpImage, 'base64'), // Convert base64 to buffer
+        contentType: 'image/jpeg', // You can set this based on your front-end
+        uploadedAt: new Date(),
+      };
+    }
+
+    // Save the updated user details
+    const updatedUser = await user.save();
+    const token = generateToken({ id: updatedUser._id, username: updatedUser.username });
+
+    // Return success response with updated user details
+    res.status(200).json({ message: 'User details updated successfully', token, id: updatedUser._id });
+  } catch (error) {
+    console.error(error); // Log the error for debugging
+    res.status(500).json({ error: 'An error occurred while updating user details' });
   }
 });
 
@@ -142,7 +190,8 @@ router.route('/register').post(async (req, res) => {
         data: Buffer.from(dpImage, 'base64'), // Convert base64 to buffer
         contentType: dpImage.contentType,
         uploadedAt: new Date()
-      } : undefined // Set dpImage if provided
+      } : undefined, // Set dpImage if provided
+      bio: "",
     });
 
     // Save the user to the database
@@ -166,7 +215,6 @@ router.route('/login').post(async (req, res) => {
   try {
     // Find the user by username
     const user = await User.findOne({ username });
-    // console.log("Y")
     if (!user) {
       return res.status(400).json({ success: false, message: "Username not found" });
     }

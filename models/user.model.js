@@ -10,6 +10,10 @@ const userSchema = new Schema({
     trim: true,
     minlength: 3
   },
+  bio: {
+    type: String,
+    maxlength: 3000
+  },
   password: {
     type: String,
     required: true
