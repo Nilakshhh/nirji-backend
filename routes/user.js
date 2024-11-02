@@ -2,12 +2,9 @@ const router = require('express').Router();
 let User = require('../models/user.model');
 const generateToken = require('../utils/generate-token.js');
 const Buffer = require('buffer').Buffer;
-const multer = require('multer'); // For handling file uploads
+const bcrypt = require('bcrypt');
 
-// Set up multer for file uploads
-const storage = multer.memoryStorage(); // Store files in memory
-const upload = multer({ storage }); // Create multer instance
-
+const saltRounds = 10;
 const validateRegisterInput = require("../utils/validator.js");
 
 router.route('/').get(async (req, res) => {
@@ -54,6 +51,7 @@ router.route('/:id').get(async (req, res) => {
 
     // Format profileImages to base64
     const profileImages = user.profileImages.map(image => ({
+      id: image._id,
       contentType: image.contentType,
       data: `data:${image.contentType};base64,${image.data.toString('base64')}` // Convert binary to base64
     }));
@@ -121,7 +119,7 @@ router.route('/:id').put(async (req, res) => {
   }
 });
 
-router.route('/image-upload').post(async (req, res) => {
+router.route('/image').post(async (req, res) => {
   const { userId, image } = req.body; // Get the token and image from the request body
 
   try {
@@ -157,8 +155,40 @@ router.route('/image-upload').post(async (req, res) => {
     res.status(500).json({ error: error.message }); // Respond with error message
   }
 });
+router.route('/image/:imageId').delete(async (req, res) => { 
+  const { userId } = req.body; // Get userId from request body
+  const { imageId } = req.params; // Get imageId from request parameters
 
+  try {
+    // Fetch the user from the database
+    const user = await User.findById(userId);
 
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Find the image index in profileImages array
+    const imageIndex = user.profileImages.findIndex(
+      (img) => img._id.toString() === imageId
+    );
+
+    // Check if the image exists
+    if (imageIndex === -1) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Remove the image from profileImages array
+    user.profileImages.splice(imageIndex, 1);
+    await user.save(); // Save the updated user document
+
+    res.status(200).json({ message: 'Profile image deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting profile image:', error); // Log the error for debugging
+    res.status(500).json({ error: 'An error occurred while deleting the profile image' });
+  }
+});
+
+// Registration Route
 router.route('/register').post(async (req, res) => {
   console.log(req.body);
   const { errors, isValid } = validateRegisterInput(req.body);
@@ -181,10 +211,13 @@ router.route('/register').post(async (req, res) => {
 
     const { username, password, email, dpImage } = req.body;
 
-    // Create new user instance
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create new user instance with hashed password
     const newUser = new User({
       username,
-      password,
+      password: hashedPassword,
       email,
       dpImage: dpImage ? {
         data: Buffer.from(dpImage, 'base64'), // Convert base64 to buffer
@@ -208,7 +241,7 @@ router.route('/register').post(async (req, res) => {
   }
 });
 
-
+// Login Route
 router.route('/login').post(async (req, res) => {
   const { username, password } = req.body;
 
@@ -219,8 +252,8 @@ router.route('/login').post(async (req, res) => {
       return res.status(400).json({ success: false, message: "Username not found" });
     }
 
-    // Check if password matches
-    const isMatch = (password === user.password);
+    // Check if password matches by comparing hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ success: false, message: "Incorrect password" });
     }
@@ -234,5 +267,6 @@ router.route('/login').post(async (req, res) => {
     res.status(500).json({ success: false, message: 'An error occurred during login' });
   }
 });
+
 
 module.exports = router;
