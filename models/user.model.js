@@ -18,6 +18,9 @@ const userSchema = new Schema({
     type: String,
     required: true
   },
+  likes: {
+    type: Number
+  },
   email: {
     type: String,
     required: true

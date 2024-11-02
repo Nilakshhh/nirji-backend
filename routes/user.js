@@ -22,6 +22,7 @@ router.route('/').get(async (req, res) => {
       return {
         id: user._id.toString(), // Convert ObjectId to string
         username: user.username,
+        likes: user.likes,
         dpImage // The image will be null if dpImage is not available
       };
     });
@@ -62,6 +63,7 @@ router.route('/:id').get(async (req, res) => {
       email: user.email,
       username: user.username,
       bio: user.bio,
+      likes: user.likes,
       dpImage, // The image will be null if dpImage is not available
       profileImages // Include formatted profileImages
     };
@@ -72,6 +74,28 @@ router.route('/:id').get(async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.route('/:id').patch(async (req, res) => {
+  const { id } = req.params; // Get the user ID from the request parameters
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      id,
+      { $inc: { likes: 1 } }, // Increment the 'likes' field by 1
+      { new: true } // Return the updated document
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' }); // Handle case where user is not found
+    }
+
+    res.json("User Liked"); // Send the updated user data as response
+  } catch (error) {
+    console.error('Error updating likes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 router.route('/:id').put(async (req, res) => {
   const { id } = req.params; // Get user ID from URL parameters
@@ -225,6 +249,7 @@ router.route('/register').post(async (req, res) => {
         uploadedAt: new Date()
       } : undefined, // Set dpImage if provided
       bio: "",
+      likes: 0
     });
 
     // Save the user to the database
